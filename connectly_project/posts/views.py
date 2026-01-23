@@ -94,6 +94,7 @@ class CommentListCreate(APIView):
         return Response(serializer.data)
 
 
+
     def post(self, request):
         serializer = CommentSerializer(data=request.data)
         if serializer.is_valid():
