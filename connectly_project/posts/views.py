@@ -1,8 +1,12 @@
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+
 from .models import Post
-from .models import User
+from .models import User, Like
+
 
 # Function 1: To get users
 def get_users(request):
@@ -52,9 +56,9 @@ def create_post(request):
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
 from .models import User, Post, Comment
-from .serializers import UserSerializer, PostSerializer, CommentSerializer
+from .serializers import UserSerializer, PostSerializer, CommentSerializer, LikeSerializer
 
 
 class UserListCreate(APIView):
@@ -102,3 +106,47 @@ class CommentListCreate(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+from rest_framework.exceptions import NotFound
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+
+
+class LikesListCreate(generics.ListCreateAPIView):
+    serializer_class = LikeSerializer
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
+
+    def get_queryset(self):
+        post_id = self.request.query_params.get('post')
+
+        if not post_id:
+            raise NotFound("Post parameter is required. Use ?post=<id>")
+
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise NotFound("Post not found.")
+
+        return Like.objects.filter(post=post)
+
+    def perform_create(self, serializer):
+        post_id = self.request.data.get('post')
+
+        if not post_id:
+            raise NotFound("Post parameter is required.")
+
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise NotFound("Post not found.")
+
+        serializer.save(user=self.request.user, post=post)
+
+
+# if no likes found return, no post found, need post parameter
+class LikeDetail(generics.RetrieveDestroyAPIView):
+    queryset = Like.objects.all()
+    serializer_class = LikeSerializer
+    permission_classes = (IsAuthenticated,)
+    authentication_classes = (TokenAuthentication,)
